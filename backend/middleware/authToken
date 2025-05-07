@@ -1,0 +1,15 @@
+const jwt = require('jsonwebtoken');
+const SECRET = 'QuemLeuÉGay'; 
+const TOKEN_EXPIRATION = '1s'; // Tempo de expiração do token
+module.exports = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ erro: 'Token não fornecido' });
+
+  const [, token] = authHeader.split(' ');
+  try {
+    jwt.verify(token,TOKEN_EXPIRATION, SECRET);
+    next();
+  } catch {
+    res.status(401).json({ erro: 'Token inválido' });
+  }
+};
