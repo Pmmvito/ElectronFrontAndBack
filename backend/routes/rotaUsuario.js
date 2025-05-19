@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Usuario = require('../models/usuario');
-const auth = require('../middleware/authToken'); // Middleware de autenticação
+const auth = require('../middleware/authToken');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt'); // Adicionando bcrypt
 const SECRET = 'seusegredo';
 
 // Rota protegida - NÃO retorna a senha
@@ -24,36 +25,61 @@ router.post('/register', async (req, res) => {
     if (!nome || !email || !senha) {
       return res.status(400).json({ erro: 'Preencha todos os campos' });
     }
-    // Opcional: checar se email já existe
+    
+    // Checar se email já existe
     const existe = await Usuario.findOne({ where: { email } });
     if (existe) {
       return res.status(400).json({ erro: 'Email já cadastrado' });
     }
-    const novoUsuario = await Usuario.create({ nome, email, senha });
-    res.json({ id: novoUsuario.id, nome: novoUsuario.nome, email: novoUsuario.email });
+    
+    // Criar hash da senha
+    const senhaCriptografada = await bcrypt.hash(senha, 10);
+    
+    // Criar usuário com senha criptografada
+    const novoUsuario = await Usuario.create({ 
+      nome, 
+      email, 
+      senha: senhaCriptografada 
+    });
+    
+    res.json({ 
+      id: novoUsuario.id, 
+      nome: novoUsuario.nome, 
+      email: novoUsuario.email 
+    });
   } catch (err) {
     res.status(500).json({ erro: 'Erro ao cadastrar usuário', detalhes: err.message });
   }
 });
 
-// Login
+// Login com verificação de senha criptografada
 router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
     console.log(`Tentativa de login para: ${email}`);
     
-    // Adicione logs antes da consulta ao banco
     console.log('Iniciando consulta ao banco de dados...');
     
     const usuario = await Usuario.findOne({ where: { email } });
     
     console.log('Consulta concluída:', usuario ? 'Usuário encontrado' : 'Usuário não encontrado');
     
-    if (!usuario || usuario.senha !== senha) {
+    // Verificação de senha com bcrypt
+    if (!usuario) {
+      return res.status(401).json({ erro: 'Credenciais inválidas' });
+    }
+    
+    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    if (!senhaValida) {
       return res.status(401).json({ erro: 'Credenciais inválidas' });
     }
 
+    // Gerar o token JWT
     const token = jwt.sign({ id: usuario.id }, SECRET, { expiresIn: '1h' });
+    
+    // Salvar o token no banco de dados
+    await usuario.update({ token });
+    
     return res.json({ token });
   } catch (error) {
     console.error('Erro no login:', error);

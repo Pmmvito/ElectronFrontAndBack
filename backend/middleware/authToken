@@ -1,15 +1,34 @@
 const jwt = require('jsonwebtoken');
-const SECRET = 'QuemLeuÉGay'; 
-const TOKEN_EXPIRATION = '1s'; // Tempo de expiração do token
-module.exports = (req, res, next) => {
+const SECRET = 'seusegredo'; // IMPORTANTE: Deve ser igual ao segredo usado no rotaUsuario.js
+const Usuario = require('../models/usuario');
+
+module.exports = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ erro: 'Token não fornecido' });
 
   const [, token] = authHeader.split(' ');
+  
   try {
-    jwt.verify(token,TOKEN_EXPIRATION, SECRET);
+    // Verificar se o token é válido com JWT
+    const decoded = jwt.verify(token, SECRET);
+    
+    // Verificar se o token existe no banco de dados
+    const usuario = await Usuario.findOne({ 
+      where: { 
+        id: decoded.id,
+        token: token 
+      } 
+    });
+    
+    if (!usuario) {
+      return res.status(401).json({ erro: 'Token inválido, não é possível ver os usuários cadastrados' });
+    }
+    
+    // Adiciona o ID do usuário à requisição para uso posterior
+    req.userId = decoded.id;
     next();
-  } catch {
-    res.status(401).json({ erro: 'Token inválido' });
+  } catch (err) {
+    console.error('Erro ao verificar token:', err);
+    res.status(401).json({ erro: 'Token inválido, não é possível ver os usuários cadastrados' });
   }
 };
